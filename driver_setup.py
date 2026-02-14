@@ -1,6 +1,5 @@
 import os
 import undetected_chromedriver as uc
-from selenium.webdriver.chrome.options import Options
 
 def get_driver(headless=False, mute_audio=False):
     options = uc.ChromeOptions()

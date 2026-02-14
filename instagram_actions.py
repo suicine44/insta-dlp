@@ -250,6 +250,7 @@ def get_stream_metadata(url):
             "ffprobe", "-v", "error", 
             "-show_entries", "stream=codec_type,width,height:format=duration", 
             "-of", "json", 
+            "--",
             url
         ]
         res = subprocess.run(cmd_json, capture_output=True, text=True, timeout=8)
@@ -285,6 +286,7 @@ def get_media_duration(file_path):
             "-v", "error", 
             "-show_entries", "format=duration", 
             "-of", "default=noprint_wrappers=1:nokey=1", 
+            "--",
             file_path
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)

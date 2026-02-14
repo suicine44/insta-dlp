@@ -125,12 +125,13 @@ def unmute_video(driver):
     except:
         pass
 
-def get_post_links(driver):
+def get_post_links(driver, soup=None):
     """
     Extracts all visible post links from the current feed view.
     Returns a set of URLs to avoid duplicates.
     """
-    soup = BeautifulSoup(driver.page_source, "html.parser")
+    if soup is None:
+        soup = BeautifulSoup(driver.page_source, "html.parser")
     links = set()
     
     # Instagram post links usually look like /p/CODE/ or /reel/CODE/
@@ -370,7 +371,7 @@ def get_video_url_from_network_logs(driver):
             
     return None
 
-def extract_media_from_post(driver):
+def extract_media_from_post(driver, soup=None):
     """
     Parses the opened post page to extract high quality media.
     Works for single images, carousels (partial), and videos.
@@ -381,7 +382,8 @@ def extract_media_from_post(driver):
     - JSON-LD structured data extraction
     - data-src lazy-loaded image detection
     """
-    soup = BeautifulSoup(driver.page_source, "html.parser")
+    if soup is None:
+        soup = BeautifulSoup(driver.page_source, "html.parser")
     media_data = []
     seen_urls = set()  # Avoid duplicates
     
@@ -519,9 +521,10 @@ def extract_media_from_post(driver):
     return media_data
 
 
-def extract_metadata(driver):
+def extract_metadata(driver, soup=None):
     """Extracts caption, date, and likes (if visible)."""
-    soup = BeautifulSoup(driver.page_source, "html.parser")
+    if soup is None:
+        soup = BeautifulSoup(driver.page_source, "html.parser")
     meta = {}
     
     # Extract Date
@@ -542,28 +545,33 @@ def extract_metadata(driver):
             # usually "Likes, Comments - Caption (@user) on Instagram..."
             meta["caption"] = content
         else:
-             meta["caption"] = driver.title
+             if soup.title:
+                 meta["caption"] = soup.title.string
+             else:
+                 meta["caption"] = driver.title
     except Exception:
         meta["caption"] = "unknown_caption"
 
     return meta
 
-def verify_post_owner(driver, target_username):
+def verify_post_owner(driver, target_username, soup=None):
     """
     Checks if the current post belongs to the target username.
     Returns True if match or uncertain, False if definitely different.
     """
+    if soup is None:
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+
     try:
-        # Strategy 1: Look for the username link in the header
+        # Strategy 1: Look for the username link in the header using soup
         # Usually internal href = "/username/"
-        header_links = driver.find_elements(By.XPATH, "//header//a")
+        header_links = soup.select("header a")
         for link in header_links:
-            href = link.get_attribute("href")
+            href = link.get("href")
             if href and f"/{target_username}/" in href:
                 return True
                 
         # Strategy 2: Check meta tags
-        soup = BeautifulSoup(driver.page_source, "html.parser")
         meta_auth = soup.find("meta", property="og:title")
         if meta_auth:
             content = meta_auth.get("content", "")
@@ -575,7 +583,7 @@ def verify_post_owner(driver, target_username):
         if header_links:
             # Check if we see ANOTHER username
             for link in header_links:
-                href = link.get_attribute("href")
+                href = link.get("href")
                 if href and "/p/" not in href and "/explore/" not in href:
                      # It's a profile link, if not target, then reject
                      if target_username not in href:

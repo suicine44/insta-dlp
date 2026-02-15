@@ -7,6 +7,7 @@ import sys
 import signal
 import argparse
 import logging
+import concurrent.futures
 import driver_setup
 import instagram_actions as action
 from urllib.parse import urlparse
@@ -302,9 +303,6 @@ def main():
 
         if args.sort in ["likes", "views"]:
             log.info(f"Pre-scanning {len(post_links)} posts for sort: {args.sort.upper()} (Parallel Mode)...")
-
-            import concurrent.futures
-            import time
 
             # Rate limiting / Worker handling
             # We use a wrapper to add specific handling if needed

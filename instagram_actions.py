@@ -34,16 +34,16 @@ def download_blob_video(driver, blob_url):
     try:
         # execute_async_script allows waiting for the callback
         base64_data = driver.execute_async_script(script, blob_url)
-        
+
         if not base64_data:
             return None
-            
+
         # Remove header "data:video/mp4;base64," (or similar)
         if "," in base64_data:
             _, encoded = base64_data.split(",", 1)
         else:
             encoded = base64_data
-            
+
         return base64.b64decode(encoded)
     except Exception as e:
         print(f"    [!] Blob extraction failed: {e}")
@@ -54,13 +54,13 @@ def scroll_human(driver, scroll_count=5):
     Scrolls the page down in a non-linear, human-like way.
     """
     actions = ActionChains(driver)
-    
+
     for _ in range(scroll_count):
         # Random scroll amount
         scroll_height = random.randint(400, 800)
-        
+
         driver.execute_script(f"window.scrollBy(0, {scroll_height});")
-        
+
         # Occasional "micro-moves" with mouse (optional but good for heuristics)
         try:
             # Move mouse slightly to center of screen
@@ -69,8 +69,8 @@ def scroll_human(driver, scroll_count=5):
             actions.reset_actions()
         except:
             pass # Ignore mouse move errors
-            
-            
+
+
         human_sleep(1.5, 3.5)
 
 def unmute_video(driver):
@@ -79,7 +79,7 @@ def unmute_video(driver):
     Refined based on failure to trigger with simple JS clicks.
     """
     print("    [ACT] Attempting to unmute video...")
-    
+
     # 1. Target the SVG specifically (Mute Icon)
     # This is more robust than generic ARIA labels which might be hidden/ambiguous
     # Common aria-labels for the button housing the SVG: "Audio is muted", "Click to enable audio"
@@ -89,7 +89,7 @@ def unmute_video(driver):
         "//button[descendant::svg[contains(@aria-label, 'Audio is muted')]]",
         "//div[@role='button'][descendant::svg[@aria-label='Audio is muted']]"
     ]
-    
+
     target_btn = None
     for sel in selectors:
         try:
@@ -102,7 +102,7 @@ def unmute_video(driver):
             if target_btn: break
         except:
             continue
-            
+
     if target_btn:
         try:
             # Use ActionChains for a "real" click
@@ -115,7 +115,7 @@ def unmute_video(driver):
             print(f"    [!] ActionChains click failed: {e}")
             # Fallback to JS click
             driver.execute_script("arguments[0].click();", target_btn)
-            
+
     # 2. Keyboard fallback (M)
     print("    [ACT] Sending 'M' key as fallback...")
     try:
@@ -132,29 +132,29 @@ def get_post_links(driver):
     """
     soup = BeautifulSoup(driver.page_source, "html.parser")
     links = set()
-    
+
     # Instagram post links usually look like /p/CODE/ or /reel/CODE/
     # We now handle both absolute (https://...) and relative (/) paths
     all_links = soup.find_all("a", href=True)
     print(f"    [DEBUG] Found {len(all_links)} total anchor tags.")
-    
+
     for a in all_links:
         href = a["href"]
-        
+
         # Check for /p/ or /reel/ segments
         # Regex explanation:
         # (?:https?://www\.instagram\.com)? -> Optional Domain
         # /(?:p|reel)/              -> /p/ or /reel/
         # ([\w-]+)/?                -> The code (captured)
         match = re.search(r"/(p|reel)/([\w-]+)", href)
-        
+
         if match:
             # Reconstruct clean URL
             short_code = match.group(2) # Group 2 is the code
             # type = match.group(1) # p or reel
             full_url = f"https://www.instagram.com/p/{short_code}/"
             links.add(full_url)
-    
+
     print(f"    [DEBUG] Filtered down to {len(links)} unique post links.")
     return links
 
@@ -164,12 +164,12 @@ def get_post_details_api(post_url, session):
     Returns dict or default structure on failure.
     """
     result = {"success": False, "likes": 0, "views": 0, "date": 0, "media": []}
-    
+
     try:
         # Clean URL and append params
         base_url = post_url.split("?")[0]
         api_url = f"{base_url}?__a=1&__d=dis"
-        
+
         # Add headers to mimic browsing context
         kwargs = {
             "timeout": 10,
@@ -178,9 +178,9 @@ def get_post_details_api(post_url, session):
                 "x-requested-with": "XMLHttpRequest"
             }
         }
-        
+
         resp = session.get(api_url, **kwargs)
-        
+
         if resp.status_code != 200:
             # print(f"    [!] API Fail {resp.status_code}: {api_url}") # Debug only
             return result
@@ -191,17 +191,17 @@ def get_post_details_api(post_url, session):
             return result
 
         # Navigate JSON structure
-        items = data.get("graphql", {}).get("shortcode_media") 
+        items = data.get("graphql", {}).get("shortcode_media")
         if not items:
             items = data.get("items", [{}])[0]
-        
+
         if not items:
             return result
 
         # Extract Metrics
         result["date"] = items.get("taken_at_timestamp", 0)
         result["views"] = items.get("video_view_count", 0)
-        
+
         likes_node = items.get("edge_media_preview_like", {})
         result["likes"] = likes_node.get("count", 0)
 
@@ -243,23 +243,23 @@ def get_stream_metadata(url):
     Returns dict: {'type': 'video'|'audio'|None, 'width': int, 'height': int, 'duration': float}
     """
     meta = {'type': None, 'width': 0, 'height': 0, 'duration': 0.0}
-    
+
     # JSON Retry for Robustness (Primary method now)
     try:
         cmd_json = [
-            "ffprobe", "-v", "error", 
-            "-show_entries", "stream=codec_type,width,height:format=duration", 
-            "-of", "json", 
+            "ffprobe", "-v", "error",
+            "-show_entries", "stream=codec_type,width,height:format=duration",
+            "-of", "json",
             "--",
             url
         ]
         res = subprocess.run(cmd_json, capture_output=True, text=True, timeout=8)
         data = json.loads(res.stdout)
-        
+
         # Duration
         if "format" in data and "duration" in data["format"]:
             meta['duration'] = float(data["format"]["duration"])
-            
+
         # Streams
         if "streams" in data:
             for s in data["streams"]:
@@ -270,10 +270,10 @@ def get_stream_metadata(url):
                     break # Take first video stream
                 elif s.get("codec_type") == "audio":
                     meta['type'] = 'audio'
-                    
+
     except Exception as e:
         print(f"    [!] Probe error: {e}")
-        
+
     return meta
 
 def get_media_duration(file_path):
@@ -282,10 +282,10 @@ def get_media_duration(file_path):
     """
     try:
         cmd = [
-            "ffprobe", 
-            "-v", "error", 
-            "-show_entries", "format=duration", 
-            "-of", "default=noprint_wrappers=1:nokey=1", 
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
             "--",
             file_path
         ]
@@ -299,13 +299,13 @@ def get_video_url_from_network_logs(driver):
     Scans logs, probess ALL candidates, and verifies the BEST video/audio pair.
     """
     print("    [LOGS] Scanning network traffic for media files...")
-    
+
     candidates = set()
     videos = [] # list of dicts with meta
     audios = [] # list of dicts with meta
-    
+
     # 1. Collect phase
-    for attempt in range(3):
+    for attempt in range(15):
         try:
             logs = driver.get_log("performance")
             for entry in logs:
@@ -316,7 +316,7 @@ def get_video_url_from_network_logs(driver):
                         response = message.get("params", {}).get("response", {})
                         url = response.get("url", "")
                         mime = response.get("mimeType", "")
-                        
+
                         if "video" in mime or "audio" in mime or ".mp4" in url:
                             if url.startswith("http"):
                                 clean = re.sub(r"(&|\?)bytestart=[0-9]+", "", url)
@@ -324,7 +324,7 @@ def get_video_url_from_network_logs(driver):
                                 if "init" not in clean and clean not in candidates:
                                     candidates.add(clean)
                 except: continue
-            
+
             # 2. Analyze phase
             if len(videos) == 0 or len(audios) == 0:
                 if candidates:
@@ -333,10 +333,10 @@ def get_video_url_from_network_logs(driver):
                         # Check if we already analyzed this URL
                         if any(v['url'] == url for v in videos) or any(a['url'] == url for a in audios):
                             continue
-                            
+
                         meta = get_stream_metadata(url)
                         meta['url'] = url
-                        
+
                         if meta['type'] == 'video':
                             pixels = meta['width'] * meta['height']
                             meta['pixels'] = pixels
@@ -352,31 +352,32 @@ def get_video_url_from_network_logs(driver):
                 videos.sort(key=lambda x: x['pixels'], reverse=True)
                 # Sort audios by duration DESC (usually longer = better/complete)
                 audios.sort(key=lambda x: x['duration'], reverse=True)
-                
+
                 best_video = videos[0]
                 best_audio = audios[0]
-                
+
                 print(f"    [★] Selected BEST Video: {best_video['width']}x{best_video['height']} | Audio: {best_audio['duration']:.1f}s")
                 return {"video": best_video['url'], "audio": best_audio['url']}
 
-            if attempt < 2:
-                print(f"    [WAIT] Need pairs (V:{len(videos)} A:{len(audios)}). Waiting... ({attempt+1}/3)")
-                time.sleep(2.5)
-                
+            if attempt < 14:
+                if attempt % 5 == 0:
+                    print(f"    [WAIT] Need pairs (V:{len(videos)} A:{len(audios)}). Waiting... ({attempt//5 + 1}/3)")
+                time.sleep(0.5)
+
         except Exception as e:
             # Suppress noisy connection errors (common during shutdown/interrupts)
             msg = str(e)
             if "HTTPConnectionPool" in msg or "Max retries exceeded" in msg or "Connection refused" in msg:
-                continue 
+                continue
             print(f"    [!] Scan error: {e}")
-            
+
     return None
 
 def extract_media_from_post(driver):
     """
     Parses the opened post page to extract high quality media.
     Works for single images, carousels (partial), and videos.
-    
+
     Enhanced with:
     - 1080px minimum resolution for images
     - Multiple srcset parsing strategies
@@ -386,9 +387,9 @@ def extract_media_from_post(driver):
     soup = BeautifulSoup(driver.page_source, "html.parser")
     media_data = []
     seen_urls = set()  # Avoid duplicates
-    
+
     MIN_IMAGE_WIDTH = 1080  # Minimum resolution requirement
-    
+
     # =================================================================
     # STRATEGY 1: Videos (blob: or direct mp4)
     # =================================================================
@@ -399,7 +400,7 @@ def extract_media_from_post(driver):
         if src and src not in seen_urls:
             media_data.append({"type": "video", "url": src, "poster": poster})
             seen_urls.add(src)
-    
+
     # =================================================================
     # STRATEGY 2: High-Quality Images with srcset (Best Quality First)
     # =================================================================
@@ -409,11 +410,11 @@ def extract_media_from_post(driver):
     for img in images:
         srcset = img.get("srcset", "")
         alt = img.get("alt", "")
-        
+
         # Skip small icons/profile pics (usually very short srcset or small patterns)
         if not srcset or len(srcset) < 30:
             continue
-        
+
         # Parse srcset
         details = []
         for candidate in srcset.split(","):
@@ -423,12 +424,12 @@ def extract_media_from_post(driver):
                 url = match.group(1)
                 width = int(match.group(2))
                 details.append((width, url))
-        
+
         if details:
             # Sort this image's variants by width DESC
             details.sort(key=lambda x: x[0], reverse=True)
             best_width, best_url = details[0]
-            
+
             # We want the LARGEST image available, but ignore tiny ones (<400)
             if best_width >= 400 and best_url not in seen_urls:
                  # Store (width, url, alt)
@@ -436,7 +437,7 @@ def extract_media_from_post(driver):
 
     # Sort ALL potential images found by width DESC
     potential_images.sort(key=lambda x: x[0], reverse=True)
-    
+
     # Take top images (if gallery, we might want multiple, but let's take all unique high-res)
     for width, url, alt in potential_images:
         media_data.append({
@@ -480,7 +481,7 @@ def extract_media_from_post(driver):
                             print(f"    [IMG] Found JSON-LD image")
         except Exception:
             pass
-    
+
     # =================================================================
     # STRATEGY 5: Meta Tags Fallback (Last Resort)
     # =================================================================
@@ -492,7 +493,7 @@ def extract_media_from_post(driver):
             if url not in seen_urls:
                 media_data.append({"type": "video", "url": url})
                 seen_urls.add(url)
-        
+
         # Then og:image (Warning: often cropped)
         og_image = soup.find("meta", property="og:image")
         if og_image and og_image.get("content"):
@@ -501,7 +502,7 @@ def extract_media_from_post(driver):
                 media_data.append({"type": "image", "url": url})
                 seen_urls.add(url)
                 print(f"    [!] Using og:image fallback (Quality/Crop risk)")
-    
+
     # =================================================================
     # STRATEGY 6: Direct high-res image links in article
     # =================================================================
@@ -517,7 +518,7 @@ def extract_media_from_post(driver):
                         media_data.append({"type": "image", "url": src})
                         seen_urls.add(src)
                         print(f"    [IMG] Found article image")
-    
+
     return media_data
 
 
@@ -525,13 +526,13 @@ def extract_metadata(driver):
     """Extracts caption, date, and likes (if visible)."""
     soup = BeautifulSoup(driver.page_source, "html.parser")
     meta = {}
-    
+
     # Extract Date
     time_tag = soup.find("time")
     if time_tag:
         meta["date"] = time_tag.get("datetime")
         meta["date_text"] = time_tag.text
-        
+
     # Extract Caption
     # Instagram structure: h1 is usually the caption in post view, or specific uls
     # We'll try finding the first user text
@@ -563,7 +564,7 @@ def verify_post_owner(driver, target_username):
             href = link.get_attribute("href")
             if href and f"/{target_username}/" in href:
                 return True
-                
+
         # Strategy 2: Check meta tags
         soup = BeautifulSoup(driver.page_source, "html.parser")
         meta_auth = soup.find("meta", property="og:title")
@@ -571,7 +572,7 @@ def verify_post_owner(driver, target_username):
             content = meta_auth.get("content", "")
             if f"(@{target_username})" in content:
                 return True
-                
+
         # If we can't find it, assume SAFE (don't skip) or STRICT?
         # Given the "corruption" issue, let's be strict if we find SOMEONE ELSE
         if header_links:
@@ -583,7 +584,7 @@ def verify_post_owner(driver, target_username):
                      if target_username not in href:
                          print(f"    [SKIP] Post owner seems to be: {href}")
                          return False
-                         
-        return True 
+
+        return True
     except Exception:
         return True # Fail open to avoid skipping valid posts on error

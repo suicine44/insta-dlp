@@ -8,7 +8,13 @@ def get_driver(headless=False, mute_audio=False):
     # Use the 'chrome_profile' folder in the scraper directory
     base_dir = os.path.dirname(os.path.abspath(__file__))
     profile_dir = os.path.join(base_dir, "chrome_profile")
-    
+
+    # Secure the profile directory (chmod 700)
+    if not os.path.exists(profile_dir):
+        os.makedirs(profile_dir, mode=0o700, exist_ok=True)
+    else:
+        os.chmod(profile_dir, 0o700)
+
     options.add_argument(f"--user-data-dir={profile_dir}")
     # Using 'Default' profile usually not needed with user-data-dir alone in UC, 
     # but good for consistency if trying to stick to one profile.

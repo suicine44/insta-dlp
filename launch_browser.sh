@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROFILE_DIR="$SCRIPT_DIR/chrome_profile"
 
 mkdir -p "$PROFILE_DIR"
+chmod 700 "$PROFILE_DIR"
 
 echo "[*] Launching Google Chrome with persistent profile..."
 echo "    Profile: $PROFILE_DIR"

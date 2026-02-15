@@ -100,6 +100,7 @@ def is_safe_username(username):
 
     # Instagram usernames only allow letters, numbers, periods, and underscores.
     # They cannot start or end with a period.
+    # Logic: Start with alnum/underscore, middle can have dots, end with alnum/underscore.
     if not re.match(r"^[a-zA-Z0-9_][a-zA-Z0-9._]*[a-zA-Z0-9_]$|^[a-zA-Z0-9_]$", username):
         return False
 

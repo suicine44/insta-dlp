@@ -223,3 +223,28 @@ def test_signal_handler(mock_log):
     main.signal_handler(None, None)
     assert main.STOP_REQUESTED is True
     mock_log.warning.assert_called_once()
+
+@pytest.mark.parametrize("username,expected", [
+    ("johndoe", True),
+    ("john.doe", True),
+    ("john_doe", True),
+    ("john_doe.123", True),
+    ("a", True),
+    ("_", True),
+    ("a.b_c", True),
+    ("a" * 30, True),
+    ("", False),
+    (None, False),
+    ("a" * 31, False),
+    ("../path", False),
+    ("path/", False),
+    ("\\path", False),
+    (".start", False),
+    ("end.", False),
+    ("double..dot", False),
+    ("special!char", False),
+    ("john doe", False),
+    ("john😀", False),
+])
+def test_is_safe_username(username, expected):
+    assert main.is_safe_username(username) == expected
